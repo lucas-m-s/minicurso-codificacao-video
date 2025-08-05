@@ -1,0 +1,1 @@
+Bem-vindo ao minicurso de Codificação de Vídeo: Uma abordagem prática utilizando a linguagem C!
