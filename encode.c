@@ -185,6 +185,7 @@ int main(int argc, char **argv)
     avcodec_free_context(&codec_ctx);
     av_frame_free(&frame);
     av_packet_free(&pkt);
+    av_free(image_data[0]);
  
     return 0;
 }
