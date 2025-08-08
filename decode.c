@@ -74,12 +74,12 @@ int main(int argc, char **argv)
         printf("Entrada inválida\n");
         return 1;
     }
-    input_filename = argv[1];
+    input_filename  = argv[1];
     output_filename = argv[2];
-    width = atoi(argv[3]);
-    height = atoi(argv[4]);
-    pix_fmt_name = argv[5];
-    codec_name = argv[6];
+    width           = atoi(argv[3]);
+    height          = atoi(argv[4]);
+    pix_fmt_name    = argv[5];
+    codec_name      = argv[6];
 
     input_file = fopen(input_filename, "rb");
     if (input_file == NULL) {

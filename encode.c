@@ -1,11 +1,12 @@
 /*
  * Exemplo de programa para demosntrar o uso da biblioteca libavcodec,
- * codificando um arquivo de vídeo bruto e salvando como um arquivo de vídeo codificado
+ * codificando um arquivo de vídeo bruto e salvando como um arquivo de vídeo codificado.
+ * Este programa foi implementado para codificar com o codec H.264, ou MPEG2, ou MJPEG.
  * 
  * Esse código é uma adptação de https://ffmpeg.org/doxygen/4.4/encode_video_8c-example.html
  *
  * Como compilar: gcc encode.c -o encode -lavcodec -lavutil
- * Como executar (exemplo): ./encode videos/entrada.yuv videos/saida.h264 1280 720 30 yuv420p libx264
+ * Como executar (exemplo): ./encode videos/entrada.yuv videos/saida.h264 1280 720 30 4000 yuv420p libx264
  * Como reproduzir vídeo codificado (exemplo): ffplay videos/saida.h264
  */
  
@@ -14,10 +15,11 @@
  
 #include <libavcodec/avcodec.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/imgutils.h>
 
 const char *output_filename, *input_filename;
 const char *pix_fmt_name, *codec_name;
-int width, height, fps, frame_size;
+int width, height, fps, bitrate;
 
 FILE *output_file, *input_file;
 
@@ -26,7 +28,10 @@ AVCodecContext *codec_ctx;
 AVPacket *pkt;
 AVFrame *frame;
 enum AVPixelFormat pix_fmt;
-int pts = 0;
+uint8_t *image_data[4];
+int image_linesize[4];
+int image_bufsize;
+long int pts = 0;
 uint8_t endcode_mpeg[] = {0, 0, 1, 0xb7};
  
 void encode(AVCodecContext *enc_ctx, AVFrame *input_frame, AVPacket *output_pkt)
@@ -57,17 +62,18 @@ int main(int argc, char **argv)
 {
     int ret;
  
-    if (argc != 8) {
+    if (argc != 9) {
         printf("Entrada inválida\n");
         return 1;
     }
-    input_filename = argv[1];
+    input_filename  = argv[1];
     output_filename = argv[2];
-    width = atoi(argv[3]);
-    height = atoi(argv[4]);
-    fps = atoi(argv[5]);
-    pix_fmt_name = argv[6];
-    codec_name = argv[7];
+    width           = atoi(argv[3]);
+    height          = atoi(argv[4]);
+    fps             = atoi(argv[5]);
+    bitrate         = atoi(argv[6]) * 1000; // bitrate dado em Kb/s na entrada
+    pix_fmt_name    = argv[7];
+    codec_name      = argv[8];
 
     input_file = fopen(input_filename, "rb");
     if (input_file == NULL) {
@@ -99,11 +105,12 @@ int main(int argc, char **argv)
         return 1;
     }
  
-    codec_ctx->bit_rate = 400000;
-    codec_ctx->width = width;
-    codec_ctx->height = height;
+    codec_ctx->bit_rate  = bitrate; // bitrate em b/s
+    codec_ctx->width     = width;
+    codec_ctx->height    = height;
     codec_ctx->time_base = (AVRational){1, fps};
     codec_ctx->framerate = (AVRational){fps, 1};
+    codec_ctx->pix_fmt   = pix_fmt;
  
     /* emit one intra frame every ten frames
      * check frame pict_type before passing frame
@@ -111,9 +118,9 @@ int main(int argc, char **argv)
      * then gop_size is ignored and the output of encoder
      * will always be I frame irrespective to gop_size
      */
-    codec_ctx->gop_size = 10;
-    codec_ctx->max_b_frames = 1;
-    codec_ctx->pix_fmt = pix_fmt;
+    codec_ctx->gop_size     = 10;
+    if(codec->id != AV_CODEC_ID_MJPEG)
+        codec_ctx->max_b_frames = 1;
  
     ret = avcodec_open2(codec_ctx, codec, NULL);
     if (ret < 0) {
@@ -135,7 +142,6 @@ int main(int argc, char **argv)
     frame->format = pix_fmt;
     frame->width  = width;
     frame->height = height;
-    frame_size = width * height;
  
     ret = av_frame_get_buffer(frame, 0);
     if (ret < 0) {
@@ -143,18 +149,22 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /* allocate image where the decoded image will be put */
+    ret = av_image_alloc(image_data, image_linesize, width, height, pix_fmt, 1);
+    if (ret < 0) {
+        printf("Não foi possível alocar o buffer de vídeo decodificado\n");
+        return ret;
+    }
+    image_bufsize = ret;
+
     while(feof(input_file) == 0){
-        ret = fread(frame->data[0], frame_size, 1, input_file);
+        ret = fread(image_data[0], image_bufsize, 1, input_file);
         if (ret <= 0)
             break;
-
-        ret = fread(frame->data[1], frame_size/4, 1, input_file);
-        if (ret <= 0)
-            break;
-
-        ret = fread(frame->data[2], frame_size/4, 1, input_file);
-        if (ret <= 0)
-            break;
+        
+        av_image_copy(frame->data, frame->linesize,
+                      (const uint8_t **)(image_data), image_linesize,
+                      pix_fmt, width, height);
 
         frame->pts = pts;
         pts++;
