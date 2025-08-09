@@ -15,7 +15,7 @@
 
 // Seção de variáveis
 const char *input_filename;
-AVFormatContext *fmt_ctx;
+AVFormatContext *fmt_ctx = NULL;
  
 int main (int argc, char **argv)
 {
